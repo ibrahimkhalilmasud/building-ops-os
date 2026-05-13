@@ -357,7 +357,7 @@ def create_ticket(
         title=payload.title,
         description=payload.description,
         priority=payload.priority,
-        sla_due_at=utc_now() + timedelta(hours=SLA_HOURS_BY_PRIORITY[payload.priority]),
+        sla_due_at=utc_now() + timedelta(hours=SLA_HOURS_BY_PRIORITY.get(payload.priority, 24)),
     )
     maintenance_tickets.append(ticket)
     notifications.append({"type": "ticket_created", "message": f"Ticket #{ticket.id}: {ticket.title}"})
