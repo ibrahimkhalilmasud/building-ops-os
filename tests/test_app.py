@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, derive_building_id_from_qr
 
 
 client = TestClient(app)
@@ -32,6 +32,19 @@ def test_qr_maintenance_request_creates_ticket_and_board_view():
     assert board.status_code == 200
     assert any(item["id"] == ticket["id"] for item in board.json()["open"])
     assert ticket["building_id"] == 2
+
+
+def test_qr_request_without_building_context_is_rejected():
+    response = client.post(
+        "/api/maintenance/qr-request",
+        json={
+            "qr_code": "ROOM-101-QR",
+            "room_id": 1,
+            "title": "Leaking tap",
+            "description": "Water leak near sink",
+        },
+    )
+    assert response.status_code == 400
 
 
 def test_manager_can_assign_technician_but_staff_cannot():
@@ -68,3 +81,9 @@ def test_pdf_report_export_has_pdf_content_type():
     response = client.get("/api/reports/buildings/1.pdf")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/pdf")
+
+
+def test_qr_building_id_parser_handles_valid_and_invalid_codes():
+    assert derive_building_id_from_qr("B2-ROOM-100") == 2
+    assert derive_building_id_from_qr("BXYZ-ROOM-100") is None
+    assert derive_building_id_from_qr("ROOM-100") is None

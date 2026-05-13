@@ -13,6 +13,8 @@ app = FastAPI(
     version="1.0.0",
     description="Smart Building Operations OS API for multi-building enterprise operations.",
 )
+SLA_HOURS_BY_PRIORITY = {"high": 4, "medium": 24, "low": 48}
+MAX_PREDICTED_SERVICE_DAYS = 30
 
 
 def utc_now() -> datetime:
@@ -197,6 +199,16 @@ def derive_building_id_from_qr(qr_code: str) -> int | None:
     return None
 
 
+def resolve_building_context(payload: QRMaintenanceRequest) -> int:
+    building_id = payload.building_id or derive_building_id_from_qr(payload.qr_code)
+    if building_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to derive building ID from QR code; provide building_id explicitly.",
+        )
+    return building_id
+
+
 @app.get("/", response_class=HTMLResponse)
 def frontend_dashboard() -> str:
     return """
@@ -344,7 +356,7 @@ def create_ticket(
         title=payload.title,
         description=payload.description,
         priority=payload.priority,
-        sla_due_at=utc_now() + timedelta(hours=4 if payload.priority == "high" else 24),
+        sla_due_at=utc_now() + timedelta(hours=SLA_HOURS_BY_PRIORITY[payload.priority]),
     )
     maintenance_tickets.append(ticket)
     notifications.append({"type": "ticket_created", "message": f"Ticket #{ticket.id}: {ticket.title}"})
@@ -353,7 +365,7 @@ def create_ticket(
 
 @app.post("/api/maintenance/qr-request", response_model=MaintenanceTicket)
 def qr_maintenance_request(payload: QRMaintenanceRequest) -> MaintenanceTicket:
-    building_id = payload.building_id or derive_building_id_from_qr(payload.qr_code) or 1
+    building_id = resolve_building_context(payload)
     return create_ticket(
         MaintenanceTicketCreate(
             building_id=building_id,
@@ -416,11 +428,16 @@ def list_notifications() -> list[dict]:
 def building_analytics(building_id: int) -> dict:
     building_tickets = [t for t in maintenance_tickets if t.building_id == building_id]
     readings = [r for r in utility_readings if r.building_id == building_id]
+    total_water = 0.0
+    total_electricity = 0.0
+    for reading in readings:
+        total_water += reading.water_liters
+        total_electricity += reading.electricity_kwh
     return {
         "building_id": building_id,
         "ticket_count": len(building_tickets),
-        "avg_water_liters": (sum(r.water_liters for r in readings) / len(readings)) if readings else 0,
-        "avg_electricity_kwh": (sum(r.electricity_kwh for r in readings) / len(readings)) if readings else 0,
+        "avg_water_liters": (total_water / len(readings)) if readings else 0,
+        "avg_electricity_kwh": (total_electricity / len(readings)) if readings else 0,
     }
 
 
@@ -445,7 +462,7 @@ def predictive_maintenance() -> list[dict]:
         {
             "asset_id": a.id,
             "asset_name": a.name,
-            "predicted_days_to_service": max(1, int((1 - a.health_score) * 30)),
+            "predicted_days_to_service": max(1, int((1 - a.health_score) * MAX_PREDICTED_SERVICE_DAYS)),
         }
         for a in assets
     ]
