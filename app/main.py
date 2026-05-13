@@ -14,7 +14,8 @@ app = FastAPI(
     description="Smart Building Operations OS API for multi-building enterprise operations.",
 )
 SLA_HOURS_BY_PRIORITY = {"high": 4, "medium": 24, "low": 48}
-MAX_PREDICTED_SERVICE_DAYS = 30
+SERVICE_PREDICTION_MULTIPLIER = 30
+QR_TICKET_PREFIX = "QR:"
 
 
 def utc_now() -> datetime:
@@ -370,7 +371,7 @@ def qr_maintenance_request(payload: QRMaintenanceRequest) -> MaintenanceTicket:
         MaintenanceTicketCreate(
             building_id=building_id,
             room_id=payload.room_id,
-            title=f"QR:{payload.title}",
+            title=f"{QR_TICKET_PREFIX}{payload.title}",
             description=f"{payload.description} (source={payload.qr_code})",
             priority="medium",
         ),
@@ -462,7 +463,7 @@ def predictive_maintenance() -> list[dict]:
         {
             "asset_id": a.id,
             "asset_name": a.name,
-            "predicted_days_to_service": max(1, int((1 - a.health_score) * MAX_PREDICTED_SERVICE_DAYS)),
+            "predicted_days_to_service": max(1, int((1 - a.health_score) * SERVICE_PREDICTION_MULTIPLIER)),
         }
         for a in assets
     ]
