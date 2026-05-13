@@ -10,7 +10,7 @@ def test_dashboard_contains_core_panels():
     response = client.get("/api/dashboard")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["buildings"] >= 1
+    assert payload["buildings"] == 2
     assert "maintenance" in payload
     assert "utilities" in payload
     assert "ai_anomaly_alerts" in payload
@@ -20,7 +20,7 @@ def test_qr_maintenance_request_creates_ticket_and_board_view():
     response = client.post(
         "/api/maintenance/qr-request",
         json={
-            "qr_code": "ROOM-101-QR",
+            "qr_code": "B2-ROOM-101-QR",
             "room_id": 1,
             "title": "Leaking tap",
             "description": "Water leak near sink",
@@ -31,6 +31,7 @@ def test_qr_maintenance_request_creates_ticket_and_board_view():
     board = client.get("/api/maintenance/board")
     assert board.status_code == 200
     assert any(item["id"] == ticket["id"] for item in board.json()["open"])
+    assert ticket["building_id"] == 2
 
 
 def test_manager_can_assign_technician_but_staff_cannot():

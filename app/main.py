@@ -68,6 +68,7 @@ class MaintenanceTicket(BaseModel):
 
 class QRMaintenanceRequest(BaseModel):
     qr_code: str
+    building_id: int | None = None
     room_id: int
     title: str
     description: str
@@ -186,6 +187,14 @@ def require_role(allowed: set[str]):
         return x_role
 
     return _dep
+
+
+def derive_building_id_from_qr(qr_code: str) -> int | None:
+    if qr_code.startswith("B") and "-" in qr_code:
+        candidate = qr_code.split("-", 1)[0].removeprefix("B")
+        if candidate.isdigit():
+            return int(candidate)
+    return None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -344,9 +353,10 @@ def create_ticket(
 
 @app.post("/api/maintenance/qr-request", response_model=MaintenanceTicket)
 def qr_maintenance_request(payload: QRMaintenanceRequest) -> MaintenanceTicket:
+    building_id = payload.building_id or derive_building_id_from_qr(payload.qr_code) or 1
     return create_ticket(
         MaintenanceTicketCreate(
-            building_id=1,
+            building_id=building_id,
             room_id=payload.room_id,
             title=f"QR:{payload.title}",
             description=f"{payload.description} (source={payload.qr_code})",
